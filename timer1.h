@@ -8,6 +8,6 @@ void Timer1_Init(void);//инициализация timer1
 void Timer1_Run(void);//запуск timer1
 void Timer1_Stop(void);//останов timer1
 void Timer1_Reset(void);//сброс timer1
-#define MID_MAS_SIZE 4
+
 
 #endif

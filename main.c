@@ -42,7 +42,7 @@ INIT_I2C();
 KBD_init();
 Timer1_Init();
 
-//wdt_enable(WDTO_1S);
+wdt_enable(WDTO_1S);
 	PT_INIT(&pt1);
 
 sei();
@@ -66,7 +66,7 @@ sei();
 		ReadTime(&pt2,i2c_mas);
 		Keyboard_Process(&pt_key);
 		Blink_Process(&pt_blink);
-	//	wdt_reset();
+		wdt_reset();
 	}
 }
 //-----------------------------------------------
@@ -86,6 +86,7 @@ void Port_Init(void)
 //-----------------------------------------------
 ISR(TIMER0_OVF_vect) //обработчик прерывания таймера0 
 {
+cli();
 	pt1.pt_time++;
 	pt2.pt_time++;
 	pt_key.pt_time++;
@@ -96,7 +97,7 @@ ISR(TIMER0_OVF_vect) //обработчик прерывания таймера0
 	TCNT0=65;
 	TIFR0&=!(1<<TOV0);
 	
-	return;
+sei();
 }
 //-----------------------------------------------------------------------------
 PT_THREAD(Display_Out_Process(struct pt *pt))
@@ -107,8 +108,8 @@ PT_THREAD(Display_Out_Process(struct pt *pt))
 
    while(1) 
    {
-		//PT_DELAY(pt,2);
-		
+   	//	TIMSK1&=!(1<<TOIE1);//overflow interrupt enable
+	//	TIMSK1&=!(1<<OCIE1A);//compare interrupt enable
 		count--;
 		if(count==-1)
 		{
@@ -131,32 +132,26 @@ PT_THREAD(Display_Out_Process(struct pt *pt))
 			tempc|=0xF;
 		}
 
+   		//TIMSK1&=!(1<<TOIE1);//overflow interrupt enable
+		//TIMSK1&=!(1<<OCIE1A);//compare interrupt enable
+		TCCR1B|=((0<<CS12)|(0<<CS11)|(0<<CS10));//FTMR_CLK=FCLK
+		PORTB&=!(1<<PB6);
 
-
-		
-	//	_delay_us(150);
-//cli();
 	    PORTB=(tempb&display_mask);
-		PORTC=tempc;	
-//sei();
+		PORTC=tempc;
+	
+
 		PT_DELAY(pt,2);
-		//PORTC|=0xF;
+
 		PORTB&=0xC0;
-		//PT_DELAY(pt,1);
+		//TIMSK1|=(1<<TOIE1);//overflow interrupt enable
+		//TIMSK1|=(1<<OCIE1A);//compare interrupt enable
+		TCCR1B|=((0<<CS12)|(1<<CS11)|(1<<CS10));//FTMR_CLK=FCLK
 		_delay_us(400);
+//		TIMSK1|=(1<<TOIE1);//overflow interrupt enable
+//		TIMSK1|=(1<<OCIE1A);//compare interrupt enable
+			
    }
    PT_END(pt);
  }
 //-----------------------------------------------------------------------------
-/*PT_THREAD(Clock_Read_Process(struct pt *pt))
- {
-//   static Clock clk;
-   PT_BEGIN(pt);
-
-  while(1) 
-   {
-	PT_DELAY(pt,50);
-	//ReadTime(&display_mas);
-   }
-   PT_END(pt);
- }*/
