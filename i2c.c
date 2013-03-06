@@ -1,9 +1,12 @@
 #include "i2c.h"
+#include "timer1.h"
 #include "keyboard.h"
 
 static volatile unsigned char second, minute, hour,day,month,year, read_time_state=0;
 volatile struct pt i2c_read, i2c_write;
 extern unsigned char I2C_Stop_Flag;
+
+extern unsigned char brightness;
 //---------------------I2C_INIT------------------------------------
 void INIT_I2C(void)
 {
@@ -202,83 +205,18 @@ PT_THREAD(ClockInit(struct pt *pt))
 	
 
 	   PT_DELAY(pt,5);
-	   PT_SPAWN(pt, &i2c_write,Write_I2C(&i2c_write,TMR_ADDR,0x0,0x0));
-	   PT_DELAY(pt,5);
-	   PT_SPAWN(pt, &i2c_write,Write_I2C(&i2c_write,TMR_ADDR,0x1,(0<<4)+0));
-	   PT_DELAY(pt,5);
-	   PT_SPAWN(pt, &i2c_write,Write_I2C(&i2c_write,TMR_ADDR,0x2,(1<<4)+2));	
+	   PT_SPAWN(pt, &i2c_read,Read_I2C(&i2c_read,TMR_ADDR,0xF,&brightness));
+
+	   PT_DELAY(pt,20);
+	   if(brightness>9)
+	   {
+	   		brightness=0;
+	   }
+	   	cli();
+		OCR1AH=0xFF;
+		OCR1AL=0xB*brightness+5;
+		sei();
 
 	PT_END(pt);
 }
-
-
-/*void ClockInit(unsigned char *clock_buf)//инициализация часов, установка
-{
-
-uint8_t reg;
-
-
-/*reg=Read_I2C(TMR_ADDR,0x0);
-_delay_us(1000);
-
-
-
-if((reg&0x80)==0)
-	return;
-
-
-
-Write_I2C(TMR_ADDR,0x2,(1<<4)+2);// 
-_delay_us(100);
-//printf("hour ok\n");
-
-Write_I2C(TMR_ADDR,0x1,(0<<4)+0);// 
-_delay_us(100);
-//printf("minute ok\n");
-
-Write_I2C(TMR_ADDR,0x0,0x0);// 
-_delay_us(100);*/
-//printf("second ok\n");
-
-//}
-//---------------------------------------------------
-/*void StoreTime(unsigned char *buf)
-{
-
-
-	Write_I2C(TMR_ADDR,0x2,(buf[4]<<4)|buf[3]);// 
-	_delay_us(100);
-//	printf("hour ok %d%d\n",buf[4],buf[3]);
-
-	Write_I2C(TMR_ADDR,0x1,(buf[1]<<4)|buf[0]);// 
-	_delay_us(100);
-//	printf("minute ok %d%d\n",buf[1],buf[0]);
-
-	Write_I2C(TMR_ADDR,0x0,0x0);// 
-	_delay_us(100);
-//	printf("second ok %d%d\n",1,1);
-
-
-}
-//--------------------------------------------------------
-void StoreDate(unsigned char *buf)
-{
-
-
-	Write_I2C(TMR_ADDR,0x5,(buf[1]<<4)|buf[0]);// 
-	_delay_us(100);
-//	printf("month ok %d%d\n",buf[1],buf[0]);
-
-	Write_I2C(TMR_ADDR,0x4,(buf[3]<<4)|(buf[2]&0x7F));// 
-	_delay_us(100);
-//	printf("day ok %d%d\n",buf[3],buf[2]&0x7F);
-
-	
-}
-//--------------------------------------------------------
-void StoreYear(unsigned char *buf)
-{
-	Write_I2C(TMR_ADDR,0x6,(buf[1]<<4)|buf[0]);// 
-	_delay_us(100);
-//	printf("year ok %d%d\n",buf[1],buf[0]);	
-}*/
+//-----------------------------------------------------------

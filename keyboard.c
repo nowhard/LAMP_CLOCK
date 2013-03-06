@@ -3,6 +3,10 @@
 #include "keyboard.h"
 #include "i2c.h"
 //#include <stdio.h>
+#include "timer1.h"
+
+
+
 
 #define KBD_PIN_LEFT		PD7
 #define KBD_PIN_RIGHT		PD6
@@ -23,7 +27,7 @@ uint8_t lastKey,Key_1,Key_2;
 
 unsigned char *display_mas,*i2c_mas;
 
-volatile unsigned char display_buf[16]={1,2,3,4,5,6};
+volatile unsigned char display_buf[20]={1,2,3,4,5,6};
 
 unsigned char display_mask=0xFF,temp_mask=0xFF;//маска отображения для мигания
 
@@ -33,6 +37,7 @@ unsigned char TuneClock_Flag=0;//флаг включен режим настройки часов
 unsigned char Screen_Flag=0;//какой экран сейчас отображается/настраивается
 unsigned char I2C_Stop_Flag=0;
 extern volatile struct pt i2c_read, i2c_write;
+extern unsigned char brightness;
 //------------------------------------------------
 unsigned char getKeyCode(uint8_t ah);
 //------------------------------------------------
@@ -103,10 +108,11 @@ PT_THREAD(Keyboard_Process(struct pt *pt))
 				{
 					TuneClock_Flag=0;
 				}
+
 				if(TuneClock_Flag==0)
 				{
 					//сохранить время
-					if(!Screen_Flag)//сохраняем часы, минуты, 
+					if(Screen_Flag==0)//сохраняем часы, минуты, 
 					{
 						   PT_DELAY(pt,5);
 						   PT_SPAWN(pt, &i2c_write,Write_I2C(&i2c_write,TMR_ADDR,0x0,0x0));
@@ -116,7 +122,8 @@ PT_THREAD(Keyboard_Process(struct pt *pt))
 						   PT_SPAWN(pt, &i2c_write,Write_I2C(&i2c_write,TMR_ADDR,0x2,(display_mas[4]|(display_mas[5]<<4))));
 						   PT_DELAY(pt,5);
 					}
-					else//сохраняем календарь
+					
+					if(Screen_Flag==1)//сохраняем календарь
 					{
 						   PT_DELAY(pt,5);
 						   PT_SPAWN(pt, &i2c_write,Write_I2C(&i2c_write,TMR_ADDR,0x6,(display_mas[0]|(display_mas[1]<<4))));
@@ -125,6 +132,13 @@ PT_THREAD(Keyboard_Process(struct pt *pt))
 						   PT_DELAY(pt,5);
 						   PT_SPAWN(pt, &i2c_write,Write_I2C(&i2c_write,TMR_ADDR,0x4,(display_mas[4]|(display_mas[5]<<4))));
 						   PT_DELAY(pt,5);
+					}
+
+					if(Screen_Flag==2)//сохраняем яркость
+					{
+						   PT_DELAY(pt,5);
+						   PT_SPAWN(pt, &i2c_write,Write_I2C(&i2c_write,TMR_ADDR,0xF,brightness));
+						   PT_DELAY(pt,5);						
 					}
 					//возобновить опрос
 					I2C_Stop_Flag=0;
@@ -137,7 +151,7 @@ PT_THREAD(Keyboard_Process(struct pt *pt))
 					if(TuneClock_Flag==1)
 					{
 						temp_mask=0b11111100;
-						if(!Screen_Flag)
+						if(Screen_Flag==0)
 						{
 							TuneClock_Flag=2;
 						}
@@ -150,6 +164,14 @@ PT_THREAD(Keyboard_Process(struct pt *pt))
 					{
 						temp_mask=0b11001111;
 					}
+
+					//--------------------
+					if(Screen_Flag==2)
+					{
+						temp_mask=0b11111110;
+						TuneClock_Flag=4;
+					}
+					//--------------------
 				}
 			}
 			
@@ -157,20 +179,33 @@ PT_THREAD(Keyboard_Process(struct pt *pt))
 			{
 				if(!TuneClock_Flag)//выбираем экран
 				{
-					Screen_Flag^=1;
+					Screen_Flag++;
 					if(Screen_Flag==0)
 					{
-						display_mas=&display_buf                                    ;
+						display_mas=&display_buf[0]                                    ;
 					}
-					else
+					
+					if(Screen_Flag==1)
 					{
 						display_mas=&display_buf[6];
+					}
+
+					if(Screen_Flag==2)
+					{
+						display_mas=&display_buf[12];
+						display_mas[0]=brightness;
+					}
+
+					if(Screen_Flag==3)
+					{
+						display_mas=&display_buf[0]; 
+						Screen_Flag=0;
 					}
 				}
 				else
 				{
 					unsigned char tmp=0;
-					if(!Screen_Flag)//редактируем часы, минуты
+					if(Screen_Flag==0)//редактируем часы, минуты
 					{			
 						if(TuneClock_Flag==2)
 						{
@@ -196,7 +231,8 @@ PT_THREAD(Keyboard_Process(struct pt *pt))
 							display_mas[5]=tmp/10;
 						}
 					}
-					else//редактируем день, месяц, год
+					//-------------------------------
+					if(Screen_Flag==1)//редактируем день, месяц, год
 					{
 						if(TuneClock_Flag==1)
 						{
@@ -235,13 +271,28 @@ PT_THREAD(Keyboard_Process(struct pt *pt))
 							display_mas[5]=tmp/10;
 						}						
 					}
+					//-----------------------------------
+					if(Screen_Flag==2)
+					{
+						brightness++;
+						if(brightness>9)
+						{
+							brightness=0;
+						}
+						display_mas[0]=brightness;
+						
+						TCCR1B&=!((1<<CS12)|(1<<CS11)|(1<<CS10));
+						OCR1AH=0xFF;
+						OCR1AL=0xB*brightness+5;
+						TCCR1B|=((0<<CS12)|(1<<CS11)|(1<<CS10));
+					}
 				}
 			}
 
-			if(Key_2==KEY_DOWN)
+		/*	if(Key_2==KEY_DOWN)
 			{
 				
-			}
+			}*/
 		}
    }
    PT_END(pt);
